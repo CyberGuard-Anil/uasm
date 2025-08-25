@@ -1,6 +1,4 @@
 
- `universal_attack_surface_mapper/README.md`**
-```markdown
 # 🛡️ Universal Attack Surface Mapper (UASM)
 
 A comprehensive cybersecurity tool for automated attack surface mapping and vulnerability assessment.
