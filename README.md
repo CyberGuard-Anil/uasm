@@ -1,7 +1,5 @@
 
-### **4. README Documentation**
-
-**File: `universal_attack_surface_mapper/README.md`**
+ `universal_attack_surface_mapper/README.md`**
 ```markdown
 # 🛡️ Universal Attack Surface Mapper (UASM)
 
