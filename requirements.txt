@@ -1,0 +1,28 @@
+# Core dependencies
+requests>=2.25.0
+PyYAML>=5.4.0
+Jinja2>=3.0.0
+SQLAlchemy>=1.4.0
+
+# Network and DNS
+dnspython>=2.1.0
+python-nmap>=0.6.1
+
+# Data visualization
+matplotlib>=3.3.0
+networkx>=2.6.0
+
+# Optional dependencies
+beautifulsoup4>=4.9.0
+lxml>=4.6.0
+cryptography>=3.4.0
+urllib3>=1.26.0
+
+# Web scraping and parsing
+html5lib>=1.1
+cssselect>=1.1.0
+
+# Development and testing (optional)
+pytest>=6.2.0
+pytest-cov>=2.12.0
+

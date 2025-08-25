@@ -1,0 +1,361 @@
+"""
+Configuration Manager for UASM
+Handles loading and managing configuration settings
+"""
+
+import os
+import yaml
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+
+class Config:
+    """Configuration manager for UASM"""
+    
+    def __init__(self, config_path: Optional[str] = None):
+        """Initialize configuration"""
+        self.config_data = {}
+        self._load_default_config()
+        
+        if config_path and Path(config_path).exists():
+            self._load_config_file(config_path)
+        elif Path("config.yaml").exists():
+            self._load_config_file("config.yaml")
+        
+        # Override with environment variables
+        self._load_env_overrides()
+    
+    def _load_default_config(self):
+        """Load default configuration"""
+        self.config_data = {
+            'general': {
+                'max_threads': 50,
+                'scan_timeout': 3600,
+                'user_agent': 'UASM/1.0 Security Scanner',
+                'rate_limit': 10
+            },
+            'database': {
+                'type': 'sqlite',
+                'name': 'uasm_results.db',
+                'host': 'localhost',
+                'port': 5432,
+                'username': '',
+                'password': ''
+            },
+            'output': {
+                'base_dir': 'scans',
+                'save_raw_data': True,
+                'compress_results': False
+            },
+            'logging': {
+                'level': 'INFO',
+                'file': 'uasm.log',
+                'max_file_size': '10MB',
+                'backup_count': 5,
+                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            },
+            'network_scanner': {
+                'threads': 50,
+                'timeout': 30,
+                'nmap_args': '-sS -sV -O --version-intensity 5',
+                'top_ports': 1000,
+                'ping_timeout': 5,
+                'service_detection': True,
+                'os_detection': True,
+                'vulnerability_scan': True
+            },
+            'web_recon': {
+                'threads': 20,
+                'timeout': 30,
+                'max_redirects': 5,
+                'subdomain_wordlist': 'wordlists/subdomains.txt',
+                'directory_wordlist': 'wordlists/directories.txt',
+                'user_agents': [
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                ],
+                'certificate_transparency': True,
+                'dns_bruteforce': True,
+                'search_engine_dorking': False,
+                'waf_detection': True,
+                'technology_detection': True,
+                'ssl_analysis': True
+            },
+            'api_security': {
+                'threads': 10,
+                'timeout': 30,
+                'swagger_endpoints': [
+                    '/swagger.json', '/api/swagger.json', '/v1/swagger.json',
+                    '/swagger/v1/swagger.json', '/api-docs', '/docs'
+                ],
+                'openapi_endpoints': [
+                    '/openapi.json', '/api/openapi.json', '/openapi/openapi.json'
+                ],
+                'common_paths': [
+                    '/api', '/v1', '/v2', '/v3', '/rest', '/graphql'
+                ],
+                'authentication_tests': True,
+                'authorization_tests': True,
+                'input_validation_tests': True,
+                'rate_limiting_tests': True
+            },
+            'cloud_recon': {
+                'threads': 10,
+                'timeout': 30,
+                'aws': {
+                    'regions': ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
+                    's3_bucket_patterns': [
+                        '{target}', '{target}-dev', '{target}-prod', '{target}-backup',
+                        '{target}-assets', '{target}-static', '{target}-uploads',
+                        '{target}-logs', '{target}-data', '{target}-staging'
+                    ]
+                },
+                'gcp': {
+                    'bucket_patterns': ['{target}', '{target}-storage', '{target}-backup']
+                },
+                'azure': {
+                    'container_patterns': ['{target}', '{target}-storage']
+                }
+            },
+            'reporting': {
+                'templates_dir': 'templates',
+                'output_dir': 'reports',
+                'formats': ['html', 'json', 'csv', 'markdown'],
+                'include_screenshots': False,
+                'include_raw_data': True
+            },
+            'wordlists': {
+                'subdomains': 'wordlists/subdomains.txt',
+                'directories': 'wordlists/directories.txt',
+                'usernames': 'wordlists/usernames.txt',
+                'passwords': 'wordlists/passwords.txt'
+            },
+            'vulnerability_assessment': {
+                'cvss_threshold': 4.0,
+                'include_info_disclosures': True,
+                'check_cve_database': True,
+                'exploit_database_lookup': False
+            },
+            'performance': {
+                'memory_limit': '2GB',
+                'disk_space_limit': '10GB',
+                'max_file_size': '100MB',
+                'cache_dns_results': True,
+                'cache_timeout': 3600
+            },
+            'correlation': {
+                'confidence_threshold': 0.7,
+                'enable_attack_paths': True,
+                'enable_finding_correlation': True
+            }
+        }
+    
+    def _load_config_file(self, config_path: str):
+        """Load configuration from YAML file"""
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                file_config = yaml.safe_load(f)
+                if file_config and isinstance(file_config, dict):
+                    self._deep_merge(self.config_data, file_config)
+                else:
+                    print(f"Warning: Config file {config_path} is empty or invalid")
+        except FileNotFoundError:
+            print(f"Warning: Config file {config_path} not found")
+        except yaml.YAMLError as e:
+            print(f"Warning: Invalid YAML in config file {config_path}: {e}")
+        except Exception as e:
+            print(f"Warning: Failed to load config file {config_path}: {e}")
+    
+    def _load_env_overrides(self):
+        """Load configuration overrides from environment variables"""
+        env_mappings = {
+            'UASM_MAX_THREADS': 'general.max_threads',
+            'UASM_TIMEOUT': 'general.scan_timeout',
+            'UASM_DB_TYPE': 'database.type',
+            'UASM_DB_HOST': 'database.host',
+            'UASM_DB_PORT': 'database.port',
+            'UASM_DB_NAME': 'database.name',
+            'UASM_DB_USER': 'database.username',
+            'UASM_DB_PASS': 'database.password',
+            'UASM_LOG_LEVEL': 'logging.level',
+            'UASM_LOG_FILE': 'logging.file',
+            'UASM_OUTPUT_DIR': 'output.base_dir',
+            'UASM_RATE_LIMIT': 'general.rate_limit'
+        }
+        
+        for env_var, config_path in env_mappings.items():
+            if env_var in os.environ:
+                value = os.environ[env_var]
+                # Convert to appropriate type
+                if config_path.endswith(('threads', 'timeout', 'port', 'rate_limit')):
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        continue
+                elif config_path.endswith(('save_raw_data', 'compress_results', 'service_detection', 'os_detection')):
+                    value = value.lower() in ('true', '1', 'yes', 'on')
+                
+                self.set(config_path, value)
+    
+    def _deep_merge(self, base_dict: Dict, update_dict: Dict):
+        """Deep merge two dictionaries"""
+        for key, value in update_dict.items():
+            if key in base_dict and isinstance(base_dict[key], dict) and isinstance(value, dict):
+                self._deep_merge(base_dict[key], value)
+            else:
+                base_dict[key] = value
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get configuration value using dot notation"""
+        keys = key.split('.')
+        value = self.config_data
+        
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+        
+        return value
+    
+    def set(self, key: str, value: Any):
+        """Set configuration value using dot notation"""
+        keys = key.split('.')
+        config = self.config_data
+        
+        for k in keys[:-1]:
+            if k not in config:
+                config[k] = {}
+            config = config[k]
+        
+        config[keys[-1]] = value
+    
+    def get_section(self, section: str) -> Dict[str, Any]:
+        """Get entire configuration section"""
+        return self.get(section, {})
+    
+    def update_section(self, section: str, updates: Dict[str, Any]):
+        """Update configuration section with new values"""
+        current_section = self.get_section(section)
+        if isinstance(current_section, dict):
+            current_section.update(updates)
+        else:
+            self.set(section, updates)
+    
+    def has_section(self, section: str) -> bool:
+        """Check if configuration section exists"""
+        return self.get(section) is not None
+    
+    def list_sections(self) -> List[str]:
+        """List all configuration sections"""
+        return list(self.config_data.keys())
+    
+    def save(self, config_path: str):
+        """Save current configuration to file"""
+        try:
+            # Ensure directory exists
+            config_file = Path(config_path)
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(self.config_data, f, default_flow_style=False, indent=2, sort_keys=False)
+        except Exception as e:
+            raise Exception(f"Failed to save config to {config_path}: {e}")
+    
+    def validate(self) -> bool:
+        """Validate configuration settings"""
+        errors = []
+        
+        # Validate thread counts
+        max_threads = self.get('general.max_threads')
+        if not isinstance(max_threads, int) or max_threads < 1 or max_threads > 1000:
+            errors.append("general.max_threads must be between 1 and 1000")
+        
+        # Validate timeout
+        timeout = self.get('general.scan_timeout')
+        if not isinstance(timeout, int) or timeout < 60:
+            errors.append("general.scan_timeout must be at least 60 seconds")
+        
+        # Validate database type
+        db_type = self.get('database.type')
+        if db_type not in ['sqlite', 'postgresql', 'mysql']:
+            errors.append("database.type must be sqlite, postgresql, or mysql")
+        
+        # Validate database port for network databases
+        if db_type in ['postgresql', 'mysql']:
+            db_port = self.get('database.port')
+            if not isinstance(db_port, int) or db_port < 1 or db_port > 65535:
+                errors.append("database.port must be between 1 and 65535")
+        
+        # Validate log level
+        log_level = self.get('logging.level')
+        if log_level not in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+            errors.append("logging.level must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+        
+        # Validate rate limit
+        rate_limit = self.get('general.rate_limit')
+        if not isinstance(rate_limit, (int, float)) or rate_limit <= 0:
+            errors.append("general.rate_limit must be a positive number")
+        
+        # Validate module thread counts
+        for module in ['network_scanner', 'web_recon', 'api_security', 'cloud_recon']:
+            module_threads = self.get(f'{module}.threads')
+            if module_threads and (not isinstance(module_threads, int) or module_threads < 1 or module_threads > 200):
+                errors.append(f"{module}.threads must be between 1 and 200")
+        
+        if errors:
+            print("Configuration validation errors:")
+            for error in errors:
+                print(f"  - {error}")
+            return False
+        
+        return True
+    
+    def get_effective_config(self) -> Dict[str, Any]:
+        """Get the complete effective configuration (after all overrides)"""
+        return self.config_data.copy()
+    
+    def reset_to_defaults(self):
+        """Reset configuration to default values"""
+        self.config_data = {}
+        self._load_default_config()
+    
+    def merge_config(self, other_config: 'Config'):
+        """Merge another configuration into this one"""
+        if isinstance(other_config, Config):
+            self._deep_merge(self.config_data, other_config.config_data)
+    
+    def export_env_vars(self) -> Dict[str, str]:
+        """Export configuration as environment variables"""
+        env_vars = {}
+        
+        # Map important config values to environment variables
+        mappings = {
+            'general.max_threads': 'UASM_MAX_THREADS',
+            'general.scan_timeout': 'UASM_TIMEOUT',
+            'database.type': 'UASM_DB_TYPE',
+            'database.host': 'UASM_DB_HOST',
+            'database.port': 'UASM_DB_PORT',
+            'logging.level': 'UASM_LOG_LEVEL',
+            'output.base_dir': 'UASM_OUTPUT_DIR'
+        }
+        
+        for config_key, env_var in mappings.items():
+            value = self.get(config_key)
+            if value is not None:
+                env_vars[env_var] = str(value)
+        
+        return env_vars
+    
+    def __str__(self) -> str:
+        """String representation of configuration"""
+        try:
+            return yaml.dump(self.config_data, default_flow_style=False, indent=2, sort_keys=False)
+        except Exception:
+            return str(self.config_data)
+    
+    def __repr__(self) -> str:
+        """Developer representation of configuration"""
+        return f"Config(sections={list(self.config_data.keys())})"
+
