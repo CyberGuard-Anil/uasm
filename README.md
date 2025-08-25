@@ -286,5 +286,4 @@ For issues and questions:
 ---
 
 **🛡️ Happy Hacking! Stay secure and scan responsibly.**
-```
 
